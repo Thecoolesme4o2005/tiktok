@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ar" dir="ltr" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok Custom Chat Overlay</title>
+  
+  <!-- CSS فوري لمنع ظهور أي شاشة بيضاء قبل تحميل المكاتب -->
+  <style>
+    html, body {
+      background-color: #030712 !important;
+      color: #f3f4f6 !important;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+  </style>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            cairo: ['Cairo', 'sans-serif'],
+            inter: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            tiktokRed: '#FE2C55',
+            tiktokCyan: '#25F4EE',
+            tiktokDark: '#0B0E14',
+            tiktokCard: '#131926',
+          },
+          animation: {
+            'slide-in': 'slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            'pop': 'popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+          },
+          keyframes: {
+            slideIn: {
+              '0%': { opacity: '0', transform: 'translateY(12px) scale(0.96)' },
+              '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+            },
+            popIn: {
+              '0%': { opacity: '0', transform: 'scale(0.85)' },
+              '100%': { opacity: '1', transform: 'scale(1)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.4);
+    }
+    
+    /* OBS Transparent Mode */
+    body.obs-mode {
+      background-color: transparent !important;
+      background: transparent !important;
+      overflow: hidden;
+    }
+
+    .chat-item {
+      transition: all 0.2s ease-in-out;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 font-inter antialiased min-h-screen flex flex-col justify-between selection:bg-tiktokRed selection:text-white">
+
+  <!-- TOP HEADER (مخفي في وضع OBS) -->
+  <header id="appHeader" class="bg-gray-900/90 backdrop-blur-md border-b border-gray-800 sticky top-0 z-40 px-4 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-tiktokRed to-tiktokCyan p-[2px] flex items-center justify-center shadow-lg">
+          <div class="w-full h-full bg-gray-950 rounded-[10px] flex items-center justify-center">
+            <i class="fa-brands fa-tiktok text-tiktokCyan text-xl"></i>
+          </div>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg leading-tight flex items-center gap-2">
+            TikTok Chat Overlay
+            <span class="text-xs bg-tiktokRed/20 text-tiktokRed border border-tiktokRed/30 px-2 py-0.5 rounded-full font-semibold">Live</span>
+          </h1>
+          <p class="text-xs text-gray-400">Streamlabs & OBS Studio Browser Source Tool</p>
+        </div>
+      </div>
+
+      <!-- Quick Action Toolbar -->
+      <div class="flex items-center flex-wrap gap-2">
+        <button id="toggleSimBtn" onclick="toggleAutoSimulation()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition flex items-center gap-2 shadow-sm">
+          <i class="fa-solid fa-play" id="simIcon"></i>
+          <span id="simText">تشغيل محاكاة المحادثة</span>
+        </button>
+        <button onclick="clearChat(true)" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-semibold text-gray-300 transition flex items-center gap-1.5 border border-gray-700">
+          <i class="fa-solid fa-trash-can"></i>
+          مسح
+        </button>
+        <button onclick="openModal('settingsModal')" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-semibold text-gray-300 transition flex items-center gap-1.5 border border-gray-700">
+          <i class="fa-solid fa-sliders"></i>
+          الإعدادات
+        </button>
+        <button onclick="copyObsUrl()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white transition flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid fa-copy"></i>
+          نسخ رابط OBS
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN APP WORKSPACE -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start" id="mainContainer">
+    
+    <!-- LEFT PANEL: معاينة الشات لمستخدم OBS -->
+    <section class="lg:col-span-8 flex flex-col gap-4">
+      <div class="bg-gray-900/60 border border-gray-800 rounded-2xl p-4 backdrop-blur-sm relative shadow-2xl flex flex-col h-[600px] overflow-hidden" id="overlayCard">
+        
+        <!-- رأس صندوق المعاينة -->
+        <div id="overlayHeader" class="flex items-center justify-between pb-3 border-b border-gray-800/80 mb-2">
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-400">منطقة ظهور الشات (Overlay Box)</span>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-gray-400">
+            <label class="flex items-center gap-1.5 cursor-pointer hover:text-white transition">
+              <input type="checkbox" id="autoScrollToggle" checked class="rounded bg-gray-800 border-gray-700 text-tiktokRed focus:ring-0">
+              نزول تلقائي
+            </label>
+            <span class="text-gray-600">|</span>
+            <span id="messageCount" class="font-mono text-tiktokCyan">0 msgs</span>
+          </div>
+        </div>
+
+        <!-- صندوق الرسائل الحية -->
+        <div id="chatBox" class="flex-1 overflow-y-auto space-y-2.5 pr-1 transition-all" style="font-size: 15px;">
+          <div id="emptyNotice" class="text-center py-20 text-gray-500 flex flex-col items-center justify-center gap-3">
+            <i class="fa-regular fa-comments text-4xl text-gray-600"></i>
+            <p class="text-sm font-medium">الشات فارغ حالياً.</p>
+            <p class="text-xs text-gray-600">أرسل رسالة تجريبية من القائمة الجانبية أو شغل المحاكاة!</p>
+          </div>
+        </div>
+
+        <!-- إشعار النسخ السريع -->
+        <div id="toast" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 border border-tiktokCyan/50 text-tiktokCyan px-4 py-2 rounded-xl text-xs font-semibold shadow-2xl flex items-center gap-2 animate-pop z-50">
+          <i class="fa-solid fa-circle-check"></i>
+          <span id="toastMsg">تم نسخ الرابط بنجاح!</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: لوحة التحكم المباشرة -->
+    <section class="lg:col-span-4 flex flex-col gap-5" id="controlPanel">
+      
+      <!-- إرسال رسالة يدوية -->
+      <div class="bg-gray-900/80 border border-gray-800 rounded-2xl p-4 shadow-xl">
+        <h2 class="text-sm font-bold text-gray-200 mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-paper-plane text-tiktokRed"></i>
+          إرسال رسالة للشات
+        </h2>
+
+        <form id="sendMessageForm" onsubmit="handleUserSubmit(event)" class="space-y-3">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1 font-medium">اسم المستخدم (Username)</label>
+            <input type="text" id="inputUser" value="StreamerFan" required class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-tiktokCyan transition">
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1 font-medium">الرتبة / الشارة</label>
+              <select id="inputBadge" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-2.5 py-2 text-xs text-gray-200 focus:outline-none focus:border-tiktokCyan">
+                <option value="none">متابع عادي</option>
+                <option value="moderator">مشرف 🛡️ (Mod)</option>
+                <option value="subscriber">مشترك ⭐ (Sub)</option>
+                <option value="topGifter">داعم كبير 👑 (VIP)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1 font-medium">نوع الرسالة</label>
+              <select id="inputType" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-2.5 py-2 text-xs text-gray-200 focus:outline-none focus:border-tiktokCyan">
+                <option value="chat">دردشة عادية</option>
+                <option value="gift">هدية 🎁 (Gift)</option>
+                <option value="like">تفاعل إعجاب ❤️ (Likes)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs text-gray-400 mb-1 font-medium">نص الرسالة</label>
+            <textarea id="inputMsg" rows="2" placeholder="اكتب رسالة لتظهر في البث..." required class="w-full bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-sm text-gray-100 focus:outline-none focus:border-tiktokCyan transition resize-none"></textarea>
+          </div>
+
+          <button type="submit" class="w-full bg-gradient-to-r from-tiktokRed to-pink-600 hover:from-red-600 hover:to-pink-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition shadow-lg shadow-tiktokRed/20 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-paper-plane"></i> إرسال إلى الشاشة
+          </button>
+        </form>
+      </div>
+
+      <!-- فلاتر سريعة -->
+      <div class="bg-gray-900/80 border border-gray-800 rounded-2xl p-4 shadow-xl">
+        <h2 class="text-sm font-bold text-gray-200 mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-filter text-tiktokCyan"></i>
+          خيارات العرض
+        </h2>
+
+        <div class="space-y-2 text-xs">
+          <label class="flex items-center justify-between p-2 rounded-lg bg-gray-950/60 hover:bg-gray-950 border border-gray-800/60 cursor-pointer">
+            <span class="text-gray-300">إخفاء الأوامر (مثل !discord)</span>
+            <input type="checkbox" id="filterCommands" class="rounded bg-gray-800 border-gray-700 text-tiktokRed focus:ring-0">
+          </label>
+          <label class="flex items-center justify-between p-2 rounded-lg bg-gray-950/60 hover:bg-gray-950 border border-gray-800/60 cursor-pointer">
+            <span class="text-gray-300">تمييز رسائل الهدايا الكبيرة</span>
+            <input type="checkbox" id="highlightGifts" checked class="rounded bg-gray-800 border-gray-700 text-tiktokRed focus:ring-0">
+          </label>
+          <label class="flex items-center justify-between p-2 rounded-lg bg-gray-950/60 hover:bg-gray-950 border border-gray-800/60 cursor-pointer">
+            <span class="text-gray-300">إظهار صور المتابعين (Avatars)</span>
+            <input type="checkbox" id="showAvatars" checked onchange="updateStyleConfig()" class="rounded bg-gray-800 border-gray-700 text-tiktokRed focus:ring-0">
+          </label>
+        </div>
+      </div>
+
+      <!-- رسائل تجريبية سريعة -->
+      <div class="bg-gray-900/80 border border-gray-800 rounded-2xl p-4 shadow-xl">
+        <h2 class="text-sm font-bold text-gray-200 mb-2.5 flex items-center gap-2">
+          <i class="fa-solid fa-bolt text-amber-400"></i>
+          تجارب سريعة للأحداث
+        </h2>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="triggerPreset('gift')" class="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 text-xs font-medium transition text-left flex items-center gap-2">
+            <i class="fa-solid fa-gift"></i> وردة x100 🌹
+          </button>
+          <button onclick="triggerPreset('mod')" class="p-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 hover:bg-blue-500/20 text-xs font-medium transition text-left flex items-center gap-2">
+            <i class="fa-solid fa-shield-halved"></i> تنبيه مشرف 🛡️
+          </button>
+          <button onclick="triggerPreset('arabic')" class="p-2 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/20 text-xs font-medium transition text-left flex items-center gap-2">
+            <i class="fa-solid fa-heart"></i> تحية للبث ❤️
+          </button>
+          <button onclick="triggerPreset('hype')" class="p-2 rounded-xl bg-tiktokRed/10 border border-tiktokRed/30 text-tiktokRed hover:bg-tiktokRed/20 text-xs font-medium transition text-left flex items-center gap-2">
+            <i class="fa-solid fa-fire"></i> سبام حماس 🔥
+          </button>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer id="appFooter" class="border-t border-gray-800/80 bg-gray-950 py-3 px-4 text-center text-xs text-gray-500">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <p>TikTok Stream Chat Overlay — جاهز تماماً للعمل على OBS و Streamlabs</p>
+      <p class="text-gray-400">افتح الرابط مع وضع <code class="text-tiktokCyan">?obs=true</code> داخل متصفح OBS</p>
+    </div>
+  </footer>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden animate-pop">
+      
+      <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+        <h3 class="font-bold text-base text-gray-100 flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-tiktokCyan"></i>
+          تخصيص مظهر الأوفرلاي
+        </h3>
+        <button onclick="closeModal('settingsModal')" class="text-gray-400 hover:text-white text-xl w-8 h-8 rounded-lg hover:bg-gray-800 flex items-center justify-center">
+          &times;
+        </button>
+      </div>
+
+      <div class="p-5 space-y-4 text-sm">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">شفافية الخلفية (<span id="opacityVal">85</span>%)</label>
+            <input type="range" id="bgOpacity" min="0" max="100" value="85" oninput="updateStyleConfig()" class="w-full accent-tiktokRed">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">حجم الخط (<span id="fontSizeVal">15</span>px)</label>
+            <input type="range" id="fontSize" min="12" max="24" value="15" oninput="updateStyleConfig()" class="w-full accent-tiktokCyan">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">لون اسم المستخدم</label>
+            <input type="color" id="userColor" value="#25F4EE" onchange="updateStyleConfig()" class="w-full h-8 rounded bg-gray-950 border border-gray-800 cursor-pointer">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">لون نص الرسالة</label>
+            <input type="color" id="textColor" value="#f3f4f6" onchange="updateStyleConfig()" class="w-full h-8 rounded bg-gray-950 border border-gray-800 cursor-pointer">
+          </div>
+        </div>
+
+        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 text-xs text-gray-400 space-y-1">
+          <div class="font-bold text-tiktokCyan mb-1">كيفية الاستخدام في OBS Studio:</div>
+          <p>1. انسخ الرابط الخاص بـ OBS بالضغط على الزر بالأسفل.</p>
+          <p>2. أضف <strong class="text-white">Browser Source</strong> جديد في OBS.</p>
+          <p>3. الصق الرابط واضبط العرض (Width) على <strong class="text-white">450</strong> والارتفاع (Height) على <strong class="text-white">650</strong>.</p>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-gray-800 bg-gray-950/80 flex items-center justify-between">
+        <button onclick="copyObsUrl()" class="px-4 py-2 rounded-xl bg-tiktokCyan/10 border border-tiktokCyan/30 text-tiktokCyan hover:bg-tiktokCyan/20 text-xs font-bold transition flex items-center gap-2">
+          <i class="fa-solid fa-copy"></i> نسخ رابط OBS
+        </button>
+        <button onclick="closeModal('settingsModal')" class="px-5 py-2 rounded-xl bg-tiktokRed hover:bg-red-600 text-white text-xs font-bold transition">
+          حفظ وإغلاق
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Dynamic CSS Styles -->
+  <style id="dynamicCustomStyles"></style>
+
+  <!-- JavaScript Logic -->
+  <script>
+    let isSimulating = false;
+    let simInterval = null;
+    let messageCounter = 0;
+
+    // استخدام تقنية BroadcastChannel للمزامنة الفورية بين لوحة التحكم ونافذة OBS
+    const syncChannel = new BroadcastChannel('tiktok_chat_sync');
+
+    syncChannel.onmessage = (event) => {
+      const data = event.data;
+      if (data.type === 'NEW_MESSAGE') {
+        renderMessageToDOM(data.payload, false);
+      } else if (data.type === 'CLEAR_CHAT') {
+        renderClearChat();
+      }
+    };
+
+    const sampleUsers = [
+      { name: 'Ahmed_Live', badge: 'moderator' },
+      { name: 'Sarah_Gamer', badge: 'subscriber' },
+      { name: 'Mohamed_VIP', badge: 'topGifter' },
+      { name: 'TikTokFan_2026', badge: 'none' },
+      { name: 'King_Streamer', badge: 'topGifter' },
+      { name: 'Nour_Eldin', badge: 'subscriber' }
+    ];
+
+    const sampleMessages = [
+      "أحلى بث والله استمر يا بطل! 🔥🔥",
+      "السلام عليكم ورحمة الله، منورين يا شباب ❤️",
+      "العب القيم الجاي مع المتابعين لاهنت!",
+      "تم الدعم بأحلى ورود 🌹🌹🌹",
+      "GG WP! أسطورة اللعب والله",
+      "منور البث يا غالي 👋",
+      "!discord",
+      "🔥🔥 حماااااس مش طبيعي اليوم!"
+    ];
+
+    const sampleGifts = [
+      "أرسل وردة 🌹 x50",
+      "أرسل نظارة TikTok 🕶️",
+      "أرسل أسد البث 🦁 عاااش الداعم!",
+      "أرسل صاروخ الدعم 🚀 فخامة!"
+    ];
+
+    // بدء التشغيل
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('obs') === 'true') {
+        enableObsMode();
+      }
+
+      updateStyleConfig();
+
+      // رسالة ترحيبية أولى
+      setTimeout(() => {
+        if (messageCounter === 0) {
+          addChatMessage('مساعد_البث', 'أهلاً بك في شات البث المباشر! الشات متصل وجاهز للعرض 🚀', 'moderator', 'chat', true);
+        }
+      }, 500);
+    });
+
+    // إرسال رسالة يدوية
+    function handleUserSubmit(e) {
+      e.preventDefault();
+      const user = document.getElementById('inputUser').value.trim() || 'متابع';
+      const badge = document.getElementById('inputBadge').value;
+      const type = document.getElementById('inputType').value;
+      const text = document.getElementById('inputMsg').value.trim();
+
+      if (!text) return;
+
+      addChatMessage(user, text, badge, type, true);
+      document.getElementById('inputMsg').value = '';
+    }
+
+    // إضافة رسالة مع مزامنتها
+    function addChatMessage(username, message, badge = 'none', type = 'chat', shouldBroadcast = false) {
+      const filterCommands = document.getElementById('filterCommands').checked;
+      if (filterCommands && message.startsWith('!')) return;
+
+      const payload = { username, message, badge, type, id: Date.now() + Math.random() };
+      
+      renderMessageToDOM(payload);
+
+      if (shouldBroadcast) {
+        syncChannel.postMessage({ type: 'NEW_MESSAGE', payload });
+      }
+    }
+
+    // رسم الرسالة على الشاشة
+    function renderMessageToDOM(data) {
+      const { username, message, badge, type } = data;
+      const chatBox = document.getElementById('chatBox');
+      const emptyNotice = document.getElementById('emptyNotice');
+      if (emptyNotice) emptyNotice.remove();
+
+      messageCounter++;
+      document.getElementById('messageCount').innerText = `${messageCounter} msgs`;
+
+      let badgeHtml = '';
+      if (badge === 'moderator') {
+        badgeHtml = `<span class="bg-blue-600/30 text-blue-400 border border-blue-500/40 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-shield-halved text-[9px]"></i> مشرف</span>`;
+      } else if (badge === 'subscriber') {
+        badgeHtml = `<span class="bg-purple-600/30 text-purple-300 border border-purple-500/40 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-star text-[9px]"></i> مشترك</span>`;
+      } else if (badge === 'topGifter') {
+        badgeHtml = `<span class="bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-crown text-[9px]"></i> داعم VIP</span>`;
+      }
+
+      const showAvatar = document.getElementById('showAvatars').checked;
+      const avatarHtml = showAvatar ? `<img src="https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username)}" class="w-7 h-7 rounded-full bg-gray-800 border border-gray-700 flex-shrink-0" alt="avatar">` : '';
+
+      let itemBgClass = "bg-gray-900/80 border-gray-800/80 text-gray-100";
+      let giftIcon = '';
+
+      const highlightGifts = document.getElementById('highlightGifts').checked;
+      if (type === 'gift' && highlightGifts) {
+        itemBgClass = "bg-gradient-to-r from-amber-950/80 to-rose-950/80 border-amber-500/50 text-amber-200 shadow-md";
+        giftIcon = '<i class="fa-solid fa-gift text-amber-400 animate-bounce"></i>';
+      } else if (type === 'like') {
+        itemBgClass = "bg-pink-950/40 border-pink-500/30 text-pink-200";
+        giftIcon = '<i class="fa-solid fa-heart text-tiktokRed"></i>';
+      }
+
+      const msgCard = document.createElement('div');
+      msgCard.className = `chat-item ${itemBgClass} border rounded-xl p-2.5 flex items-start gap-2.5 animate-slide-in backdrop-blur-md shadow-sm`;
+
+      msgCard.innerHTML = `
+        ${avatarHtml}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap mb-0.5">
+            <span class="chat-user-name font-bold text-xs tracking-wide cursor-pointer text-tiktokCyan">${escapeHtml(username)}</span>
+            ${badgeHtml}
+            ${giftIcon}
+          </div>
+          <p class="chat-message-text text-sm break-words leading-relaxed font-medium">${escapeHtml(message)}</p>
+        </div>
+      `;
+
+      chatBox.appendChild(msgCard);
+
+      const autoScroll = document.getElementById('autoScrollToggle').checked;
+      if (autoScroll) {
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
+
+      if (chatBox.children.length > 40) {
+        chatBox.removeChild(chatBox.firstChild);
+      }
+    }
+
+    // تنظيف الشات
+    function clearChat(broadcast = false) {
+      renderClearChat();
+      if (broadcast) {
+        syncChannel.postMessage({ type: 'CLEAR_CHAT' });
+      }
+    }
+
+    function renderClearChat() {
+      const chatBox = document.getElementById('chatBox');
+      chatBox.innerHTML = `
+        <div id="emptyNotice" class="text-center py-20 text-gray-500 flex flex-col items-center justify-center gap-3">
+          <i class="fa-regular fa-comments text-4xl text-gray-600"></i>
+          <p class="text-sm font-medium">تم مسح الشات.</p>
+        </div>
+      `;
+      messageCounter = 0;
+      document.getElementById('messageCount').innerText = `0 msgs`;
+    }
+
+    // تشغيل المحاكاة التلقائية
+    function toggleAutoSimulation() {
+      isSimulating = !isSimulating;
+      const btn = document.getElementById('toggleSimBtn');
+      const icon = document.getElementById('simIcon');
+      const text = document.getElementById('simText');
+
+      if (isSimulating) {
+        btn.classList.replace('bg-indigo-600', 'bg-amber-600');
+        btn.classList.replace('hover:bg-indigo-500', 'hover:bg-amber-500');
+        icon.className = 'fa-solid fa-pause';
+        text.innerText = 'إيقاف المحاكاة';
+
+        simInterval = setInterval(() => {
+          const user = sampleUsers[Math.floor(Math.random() * sampleUsers.length)];
+          const isGift = Math.random() < 0.25;
+          const isLike = Math.random() < 0.2;
+
+          if (isGift) {
+            const giftMsg = sampleGifts[Math.floor(Math.random() * sampleGifts.length)];
+            addChatMessage(user.name, giftMsg, user.badge, 'gift', true);
+          } else if (isLike) {
+            addChatMessage(user.name, 'أرسل إعجابات للبث! ❤️', user.badge, 'like', true);
+          } else {
+            const msg = sampleMessages[Math.floor(Math.random() * sampleMessages.length)];
+            addChatMessage(user.name, msg, user.badge, 'chat', true);
+          }
+        }, 1800);
+      } else {
+        clearInterval(simInterval);
+        btn.classList.replace('bg-amber-600', 'bg-indigo-600');
+        btn.classList.replace('hover:bg-amber-500', 'hover:bg-indigo-500');
+        icon.className = 'fa-solid fa-play';
+        text.innerText = 'تشغيل محاكاة المحادثة';
+      }
+    }
+
+    // رسائل تجريبية سريعة
+    function triggerPreset(type) {
+      if (type === 'gift') {
+        addChatMessage('داعم_الملوك', 'أرسل أسد البث 🦁 x10 (سوبر دعم!)', 'topGifter', 'gift', true);
+      } else if (type === 'mod') {
+        addChatMessage('المشرف_العام', 'يرجى الالتزام بالقوانين وعدم تكرار الكلام بالبث 🛡️', 'moderator', 'chat', true);
+      } else if (type === 'arabic') {
+        addChatMessage('أبو_فهد', 'أحلى وأقوى بث في تيك توك اليوم يا وحش 🚀❤️', 'subscriber', 'chat', true);
+      } else if (type === 'hype') {
+        for (let i = 0; i < 3; i++) {
+          setTimeout(() => {
+            addChatMessage(`متابع_${Math.floor(Math.random()*800)}`, '🔥🔥🔥 كفووووو استمررر 🔥🔥🔥', 'none', 'chat', true);
+          }, i * 180);
+        }
+      }
+    }
+
+    // تفعيل وضع OBS الشفاف
+    function enableObsMode() {
+      document.body.classList.add('obs-mode');
+      const hideIds = ['appHeader', 'appFooter', 'controlPanel', 'overlayHeader'];
+      hideIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+
+      const mainContainer = document.getElementById('mainContainer');
+      mainContainer.className = 'w-full h-screen p-2 m-0 max-w-none';
+
+      const overlayCard = document.getElementById('overlayCard');
+      overlayCard.className = 'bg-transparent border-none shadow-none h-full p-1';
+    }
+
+    // تحديث وتطبيق الإعدادات
+    function updateStyleConfig() {
+      const opacity = document.getElementById('bgOpacity').value;
+      const size = document.getElementById('fontSize').value;
+      const textColor = document.getElementById('textColor').value;
+      const userColor = document.getElementById('userColor').value;
+
+      document.getElementById('opacityVal').innerText = opacity;
+      document.getElementById('fontSizeVal').innerText = size;
+
+      const chatBox = document.getElementById('chatBox');
+      if (chatBox) chatBox.style.fontSize = `${size}px`;
+
+      const opacityHex = Math.round((opacity / 100) * 255).toString(16).padStart(2, '0');
+
+      document.getElementById('dynamicCustomStyles').innerHTML = `
+        .chat-item {
+          background-color: #111827${opacityHex} !important;
+        }
+        .chat-message-text {
+          color: ${textColor} !important;
+        }
+        .chat-user-name {
+          color: ${userColor} !important;
+        }
+      `;
+    }
+
+    // نسخ رابط OBS
+    function copyObsUrl() {
+      const currentUrl = window.location.href.split('?')[0];
+      const obsLink = `${currentUrl}?obs=true`;
+
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(obsLink);
+      } else {
+        const temp = document.createElement('input');
+        temp.value = obsLink;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+      }
+
+      showToast('تم نسخ رابط OBS الشفاف إلى الحافظة!');
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastMsg').innerText = msg;
+      toast.classList.remove('hidden');
+      setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 2500);
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>
