@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>شات عام وفوري - متزامن بين الهاتف والكمبيوتر</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- مكتبة السيرفر السحابي المجاني للربط بين الهواتف والكمبيوترات فوراً -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #efeae2;
+            --chat-header: #ffffff;
+            --my-bubble: #d9fdd3;
+            --other-bubble: #ffffff;
+            --text: #111b21;
+            --danger: #ef4444;
+            --success: #10b981;
+            --dark: #1e293b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Cairo', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: #d1d7db;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .chat-app {
+            width: 100%;
+            height: 100vh;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .header {
+            background: var(--chat-header);
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        .user-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .name-wrapper {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .status-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #f59e0b; /* أصفر حتى يتم الاتصال */
+        }
+
+        .status-dot.online {
+            background-color: var(--success);
+        }
+
+        .name-row {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .username-input {
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 3px 6px;
+            font-size: 13.5px;
+            font-weight: bold;
+            color: var(--text);
+            outline: none;
+            background: #f9fafb;
+            width: 110px;
+        }
+
+        .token-btn {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            padding: 3px 6px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-action {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .admin-btn {
+            background: var(--dark);
+            color: white;
+        }
+
+        .clear-btn {
+            background: transparent;
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
+
+        .chat-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .message {
+            max-width: 75%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 14.5px;
+            position: relative;
+            line-height: 1.4;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.06);
+            word-wrap: break-word;
+        }
+
+        .message.mine {
+            align-self: flex-start;
+            background-color: var(--my-bubble);
+            border-top-right-radius: 0;
+        }
+
+        .message.theirs {
+            align-self: flex-end;
+            background-color: var(--other-bubble);
+            border-top-left-radius: 0;
+        }
+
+        .sender-header {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #ea580c;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .sender-header.mine-header {
+            color: #0284c7;
+        }
+
+        .badge-verified {
+            font-size: 10px;
+            background: #fef3c7;
+            color: #b45309;
+            border: 1px solid #fde68a;
+            border-radius: 4px;
+            padding: 1px 4px;
+        }
+
+        .mention-me {
+            background: #fef08a;
+            color: #854d0e;
+            font-weight: 700;
+            padding: 2px 4px;
+            border-radius: 4px;
+            border: 1px solid #fde047;
+        }
+
+        .mention-other {
+            background: #e0f2fe;
+            color: #0369a1;
+            font-weight: 700;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+
+        .time {
+            font-size: 9.5px;
+            color: #667781;
+            margin-top: 3px;
+            display: block;
+            text-align: left;
+        }
+
+        .footer {
+            background: #f0f2f5;
+            padding: 10px 16px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .footer input {
+            flex: 1;
+            padding: 10px 16px;
+            border-radius: 25px;
+            border: 1px solid #ffffff;
+            outline: none;
+            font-size: 14.5px;
+            background: #ffffff;
+        }
+
+        .footer input:disabled {
+            background-color: #e2e8f0;
+            color: #64748b;
+        }
+
+        .footer button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .footer button:disabled {
+            background: #94a3b8;
+        }
+
+        /* شاشة الحظر */
+        #blocked-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 23, 42, 0.96);
+            z-index: 99999;
+            color: white;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #blocked-overlay h1 {
+            font-size: 28px;
+            color: var(--danger);
+            margin-bottom: 12px;
+        }
+
+        .admin-unblock-btn {
+            margin-top: 20px;
+            background: var(--success);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        /* المودال */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.65);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: #fff;
+            width: 92%;
+            max-width: 580px;
+            border-radius: 12px;
+            padding: 20px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 10px;
+            margin-bottom: 12px;
+        }
+
+        .close-modal {
+            font-size: 22px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            color: #64748b;
+        }
+
+        .modal-body {
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+
+        table th, table td {
+            padding: 8px;
+            text-align: right;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        table th {
+            background: #f8fafc;
+            color: #475569;
+        }
+
+        .ip-badge {
+            background: #e2e8f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            direction: ltr;
+            display: inline-block;
+            font-size: 12px;
+        }
+
+        .device-badge {
+            font-size: 11px;
+            background: #e0e7ff;
+            color: #3730a3;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .btn-block {
+            background: var(--danger);
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .btn-unblock {
+            background: var(--success);
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .token-box {
+            background: #f8fafc;
+            border: 1px dashed #94a3b8;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 13.5px;
+            color: #0f172a;
+            user-select: all;
+            margin: 10px 0;
+            word-break: break-all;
+            direction: ltr;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- الشاشة المحظورة -->
+    <div id="blocked-overlay">
+        <h1>⛔ تم حظرك من الموقع</h1>
+        <p>لقد تم إدراجك في قائمة الحظر (Blacklist) بواسطة إدارة الموقع.</p>
+        <p style="margin-top: 10px; font-size: 13px; color: #94a3b8;">
+            عنوان IP الخاص بك: <span id="blocked-user-ip" style="color: #f87171;"></span>
+        </p>
+
+        <div id="admin-recovery-box" style="display: none; margin-top: 15px; border-top: 1px solid #334155; padding-top: 15px;">
+            <p style="color: #38bdf8; font-size: 13px;">🛡️ أنت على السيرفر المحلي (Localhost) - لديك الصلاحية الكاملة:</p>
+            <button id="self-unblock-btn" class="admin-unblock-btn">فك حظر نفسي واستعادة التحكم 🔓</button>
+        </div>
+    </div>
+
+    <!-- نافذة إدخال كلمة السر / التوكن عند استخدام اسم محمي -->
+    <div class="modal" id="password-auth-modal">
+        <div class="modal-content" style="max-width: 400px; border-top: 4px solid var(--danger);">
+            <div class="modal-header">
+                <h3>🔒 اسم محمي بكلمة سر / توكن</h3>
+            </div>
+            <div class="modal-body">
+                <p id="auth-modal-msg" style="font-size: 13px; color: #334155; margin-bottom: 10px;"></p>
+                <label style="font-size: 12px; font-weight: bold; color: #64748b;">أدخل كلمة السر / التوكن للمتابعة:</label>
+                <input type="password" id="auth-password-input" placeholder="اكتب التوكن هنا..." style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; outline: none;">
+                <div style="display: flex; gap: 8px; margin-top: 15px;">
+                    <button id="auth-confirm-btn" class="btn-action admin-btn" style="flex: 1; justify-content: center;">دخول 🔓</button>
+                    <button id="auth-cancel-btn" class="btn-action clear-btn" style="flex: 1; justify-content: center;">إلغاء ❌</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- تطبيق الشات العام -->
+    <div class="chat-app">
+        <header class="header">
+            <div class="user-meta">
+                <div class="avatar" id="avatar-icon">م</div>
+                <div class="name-wrapper">
+                    <div class="status-container">
+                        <span class="status-dot" id="net-status-dot"></span>
+                        <span id="net-status-text">جاري الاتصال بالسحابة...</span>
+                    </div>
+                    <div class="name-row">
+                        <input type="text" id="username" class="username-input" maxlength="15" title="اضغط Enter لتأكيد الاسم" />
+                        <button type="button" class="token-btn" id="open-token-modal" title="عرض التوكن">🔑 توكن</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <button id="admin-blacklist-btn" class="btn-action admin-btn" style="display: none;">
+                    🛡️ لوحة الحظر
+                </button>
+                <button id="clear-chat" class="btn-action clear-btn" title="حذف جميع الرسائل">مسح 🗑️</button>
+            </div>
+        </header>
+
+        <div class="chat-body" id="messages-container"></div>
+
+        <form class="footer" id="chat-form">
+            <input type="text" id="message-text" placeholder="اكتب رسالتك للجميع هنا..." autocomplete="off" required />
+            <button type="submit" id="send-btn" title="إرسال">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                    <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
+        </form>
+    </div>
+
+    <!-- نافذة التوكن -->
+    <div class="modal" id="token-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔑 رمز الأمان (Token) الخاص باسمك</h3>
+                <button class="close-modal" id="close-token-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 13px; color: #475569;">
+                    اسمك المحمي: <strong id="token-display-name" style="color: var(--primary);"></strong>
+                </p>
+                <p style="font-size: 12px; color: #64748b; margin-top: 5px;">
+                    انسخ هذا التوكن واستخدمه عند الدخول من هاتفك أو أي كمبيوتر آخر ليسمح لك باستخدام نفس الاسم:
+                </p>
+                <div class="token-box" id="token-box-value"></div>
+                <button id="copy-token-btn" class="btn-action admin-btn" style="width: 100%; justify-content: center; margin-bottom: 10px;">
+                    📋 نسخ التوكن
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- لوحة تحكم Blacklist للـ Localhost -->
+    <div class="modal" id="admin-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>لوحة إدارة الحظر (Localhost Admin)</h3>
+                <button class="close-modal" id="close-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h4 style="margin-bottom: 8px; color: #334155;">الأجهزة المتصلة حالياً في الشات:</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>الاسم</th>
+                            <th>الجهاز</th>
+                            <th>عنوان IP</th>
+                            <th>الإجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody id="online-users-table"></tbody>
+                </table>
+
+                <h4 style="margin-top: 20px; margin-bottom: 8px; color: var(--danger);">المحظورين (Blacklist):</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>الاسم</th>
+                            <th>عنوان IP</th>
+                            <th>فك الحظر</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blocked-users-table"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'chat_history_data_v3';
+        const BLACKLIST_KEY = 'chat_blacklist_ips_v3';
+        const REGISTERED_NAMES_KEY = 'chat_registered_names_v3';
+
+        const isLocalhost = ['localhost', '127.0.0.1', ''].includes(window.location.hostname) || window.location.protocol === 'file:';
+        const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const deviceLabel = isMobileDevice ? '📱 هاتف' : '💻 كمبيوتر';
+
+        let myUserId = sessionStorage.getItem('chat_user_uid');
+        if (!myUserId) {
+            myUserId = 'u_' + Math.random().toString(36).substring(2, 8);
+            sessionStorage.setItem('chat_user_uid', myUserId);
+        }
+
+        let userIP = 'جاري الجلب...';
+        let currentName = sessionStorage.getItem('chat_name') || ('مستخدم ' + Math.floor(100 + Math.random() * 900));
+
+        const usernameInput = document.getElementById('username');
+        const avatarIcon = document.getElementById('avatar-icon');
+        const chatForm = document.getElementById('chat-form');
+        const messageText = document.getElementById('message-text');
+        const sendBtn = document.getElementById('send-btn');
+        const messagesContainer = document.getElementById('messages-container');
+        const clearChatBtn = document.getElementById('clear-chat');
+        const adminBtn = document.getElementById('admin-blacklist-btn');
+        const adminModal = document.getElementById('admin-modal');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const onlineUsersTable = document.getElementById('online-users-table');
+        const blockedUsersTable = document.getElementById('blocked-users-table');
+        const blockedOverlay = document.getElementById('blocked-overlay');
+        const blockedUserIpSpan = document.getElementById('blocked-user-ip');
+        const adminRecoveryBox = document.getElementById('admin-recovery-box');
+        const selfUnblockBtn = document.getElementById('self-unblock-btn');
+        const netStatusDot = document.getElementById('net-status-dot');
+        const netStatusText = document.getElementById('net-status-text');
+
+        const tokenModal = document.getElementById('token-modal');
+        const openTokenBtn = document.getElementById('open-token-modal');
+        const closeTokenBtn = document.getElementById('close-token-btn');
+        const tokenDisplayName = document.getElementById('token-display-name');
+        const tokenBoxValue = document.getElementById('token-box-value');
+        const copyTokenBtn = document.getElementById('copy-token-btn');
+
+        const passwordAuthModal = document.getElementById('password-auth-modal');
+        const authModalMsg = document.getElementById('auth-modal-msg');
+        const authPasswordInput = document.getElementById('auth-password-input');
+        const authConfirmBtn = document.getElementById('auth-confirm-btn');
+        const authCancelBtn = document.getElementById('auth-cancel-btn');
+
+        let activeUsers = new Map();
+        let isCoolingDown = false;
+        let pendingNameCheck = null;
+
+        // ===============================================================
+        // 1. نظام الربط المباشر السحابي عبر WebSocket (يعمل في العالم كله)
+        // ===============================================================
+        const MQTT_ROOM_TOPIC = 'global_live_chat_sync_room_88492';
+        let client = null;
+        let isConnected = false;
+        let outgoingQueue = [];
+
+        function connectToGlobalServer() {
+            try {
+                // خادم HiveMQ العالمي السحابي على المنفذ الآمن 8884
+                const clientId = 'c_' + myUserId + '_' + Math.floor(Math.random()*1000);
+                client = new Paho.MQTT.Client('broker.hivemq.com', 8884, clientId);
+
+                client.onConnectionLost = (responseObject) => {
+                    isConnected = false;
+                    netStatusDot.classList.remove('online');
+                    netStatusText.textContent = 'إعادة الاتصال...';
+                    setTimeout(connectToGlobalServer, 2000);
+                };
+
+                client.onMessageArrived = (message) => {
+                    try {
+                        const packet = JSON.parse(message.payloadString);
+                        processIncomingPacket(packet);
+                    } catch (e) {}
+                };
+
+                client.connect({
+                    useSSL: true,
+                    timeout: 4,
+                    keepAliveInterval: 30,
+                    cleanSession: true,
+                    onSuccess: () => {
+                        isConnected = true;
+                        netStatusDot.classList.add('online');
+                        netStatusText.textContent = 'متصل عام (الكمبيوتر + الهاتف) 🟢';
+                        client.subscribe(MQTT_ROOM_TOPIC);
+
+                        // إرسال الرسائل التي كُتبت قبل اكتمال الاتصال
+                        while (outgoingQueue.length > 0) {
+                            sendGlobalPacket(outgoingQueue.shift());
+                        }
+
+                        // إشعار فوري بالتواجد وجلب الأسماء المسجلة
+                        sendGlobalPacket({ type: 'req_registry' });
+                        announcePresence();
+                    },
+                    onFailure: () => {
+                        isConnected = false;
+                        netStatusDot.classList.remove('online');
+                        netStatusText.textContent = 'فشل، إعادة المحاولة...';
+                        setTimeout(connectToGlobalServer, 2000);
+                    }
+                });
+            } catch (err) {
+                setTimeout(connectToGlobalServer, 3000);
+            }
+        }
+
+        function sendGlobalPacket(packet) {
+            if (isConnected && client) {
+                try {
+                    const msg = new Paho.MQTT.Message(JSON.stringify(packet));
+                    msg.destinationName = MQTT_ROOM_TOPIC;
+                    client.send(msg);
+                } catch(e) {}
+            } else {
+                outgoingQueue.push(packet);
+            }
+        }
+
+        // ===============================================================
+        // 2. معالجة الرسائل والأجهزة المشتركة
+        // ===============================================================
+        function processIncomingPacket(packet) {
+            if (packet.type === 'chat_msg') {
+                renderMessage(packet.data, cleanString(packet.data.name) === cleanString(currentName));
+                scrollToBottom();
+            } else if (packet.type === 'presence') {
+                activeUsers.set(packet.data.userId, {
+                    name: packet.data.name,
+                    ip: packet.data.ip,
+                    device: packet.data.device
+                });
+                if (isLocalhost && adminModal.style.display === 'flex') renderAdminTables();
+            } else if (packet.type === 'req_registry') {
+                const reg = getRegisteredNames();
+                sendGlobalPacket({ type: 'res_registry', data: reg });
+            } else if (packet.type === 'res_registry') {
+                const current = getRegisteredNames();
+                const merged = Object.assign({}, current, packet.data);
+                localStorage.setItem(REGISTERED_NAMES_KEY, JSON.stringify(merged));
+            } else if (packet.type === 'name_locked') {
+                const reg = getRegisteredNames();
+                reg[packet.data.cleanKey] = packet.data;
+                localStorage.setItem(REGISTERED_NAMES_KEY, JSON.stringify(reg));
+            } else if (packet.type === 'blacklist_sync') {
+                localStorage.setItem(BLACKLIST_KEY, JSON.stringify(packet.data));
+                checkIfBlocked();
+                if (isLocalhost) renderAdminTables();
+            }
+        }
+
+        // ===============================================================
+        // 3. خوارزميات حماية الأسماء بالتوكن والتشابه
+        // ===============================================================
+        function cleanString(str) {
+            return (str || '').trim().toLowerCase()
+                .replace(/[\u064B-\u065F\u0670]/g, '')
+                .replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+                .replace(/[\s\-_._#@]/g, '');
+        }
+
+        function stripNumbers(str) {
+            return cleanString(str).replace(/[0-9٠-٩]/g, '');
+        }
+
+        function calculateSimilarity(str1, str2) {
+            const s1 = cleanString(str1), s2 = cleanString(str2);
+            if (s1 === s2) return 1.0;
+            if (!s1 || !s2) return 0.0;
+            const matrix = [];
+            for (let i = 0; i <= s1.length; i++) matrix[i] = [i];
+            for (let j = 0; j <= s2.length; j++) matrix[0][j] = j;
+            for (let i = 1; i <= s1.length; i++) {
+                for (let j = 1; j <= s2.length; j++) {
+                    const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+                    matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
+                }
+            }
+            return 1.0 - (matrix[s1.length][s2.length] / Math.max(s1.length, s2.length));
+        }
+
+        function checkImpersonation(candidate, registered) {
+            const cClean = cleanString(candidate), rClean = cleanString(registered);
+            if (cClean === rClean) return { blocked: true, exact: true, target: registered };
+
+            const cNoNum = stripNumbers(candidate), rNoNum = stripNumbers(registered);
+            if (cNoNum.length >= 2 && cNoNum === rNoNum) return { blocked: true, reason: 'إضافة أرقام على اسم محمي', target: registered };
+
+            if (cClean.includes(rClean) || rClean.includes(cClean)) return { blocked: true, reason: 'إضافة حروف على اسم محمي', target: registered };
+
+            const sim = calculateSimilarity(candidate, registered);
+            if (sim >= 0.70) return { blocked: true, reason: `تشابه ${Math.round(sim*100)}% مع اسم محمي`, target: registered };
+
+            return { blocked: false };
+        }
+
+        function getRegisteredNames() {
+            try { return JSON.parse(localStorage.getItem(REGISTERED_NAMES_KEY)) || {}; } catch(e){ return {}; }
+        }
+
+        function getMyTokenForName(name) {
+            return localStorage.getItem('tok_' + cleanString(name)) || '';
+        }
+
+        function setMyTokenForName(name, token) {
+            localStorage.setItem('tok_' + cleanString(name), token);
+        }
+
+        function attemptSetUsername(desiredName) {
+            const trimmed = desiredName.trim();
+            if (!trimmed || trimmed.length < 2) {
+                alert('الاسم يجب ألا يقل عن حرفين!');
+                usernameInput.value = currentName;
+                return;
+            }
+
+            if (/^مستخدم\s\d+$/i.test(trimmed)) {
+                applyNameChange(trimmed, '');
+                return;
+            }
+
+            const registry = getRegisteredNames();
+            const myStoredToken = getMyTokenForName(trimmed);
+
+            let conflict = null;
+            for (let key in registry) {
+                const record = registry[key];
+                const res = checkImpersonation(trimmed, record.name);
+                if (res.blocked) {
+                    conflict = record;
+                    break;
+                }
+            }
+
+            if (conflict) {
+                if (myStoredToken && myStoredToken === conflict.token) {
+                    applyNameChange(conflict.name, conflict.token);
+                    return;
+                }
+
+                pendingNameCheck = conflict;
+                authModalMsg.innerHTML = `الاسم <strong>"${conflict.name}"</strong> محمي بتوكن. أدخل كلمة السر التوكن لتأكيد أنك صاحب الاسم:`;
+                authPasswordInput.value = '';
+                passwordAuthModal.style.display = 'flex';
+                authPasswordInput.focus();
+                return;
+            }
+
+            // اسم جديد
+            let assignedToken = myStoredToken;
+            if (!assignedToken) {
+                assignedToken = prompt(`🆕 هذا اسم جديد (${trimmed})! اكتب كلمة سر / توكن لحمايته (أو اضغط موافق لتوليد رمز تلقائي):`, '');
+                if (!assignedToken || !assignedToken.trim()) {
+                    assignedToken = 'tok_' + Math.random().toString(36).substring(2, 8) + '_' + Date.now().toString(36);
+                }
+                assignedToken = assignedToken.trim();
+            }
+
+            setMyTokenForName(trimmed, assignedToken);
+            const recordData = {
+                name: trimmed,
+                token: assignedToken,
+                cleanKey: cleanString(trimmed),
+                claimedAt: Date.now()
+            };
+            registry[cleanString(trimmed)] = recordData;
+            localStorage.setItem(REGISTERED_NAMES_KEY, JSON.stringify(registry));
+
+            // بث القفل لجميع الأجهزة فوراً
+            sendGlobalPacket({ type: 'name_locked', data: recordData });
+            applyNameChange(trimmed, assignedToken);
+            alert(`✅ تم قفل وتأمين اسمك (${trimmed}) بتوكن خاص:\n${assignedToken}`);
+        }
+
+        authConfirmBtn.addEventListener('click', () => {
+            const entered = authPasswordInput.value.trim();
+            if (!pendingNameCheck) return;
+
+            if (entered === pendingNameCheck.token) {
+                setMyTokenForName(pendingNameCheck.name, entered);
+                applyNameChange(pendingNameCheck.name, entered);
+                passwordAuthModal.style.display = 'none';
+                alert('🎉 توكن صحيح! تم تسجيل الدخول باسمك.');
+            } else {
+                alert('❌ التوكن / كلمة السر خاطئة! لا يمكنك انتحال هذا الاسم.');
+                authPasswordInput.value = '';
+            }
+        });
+
+        authCancelBtn.addEventListener('click', () => {
+            passwordAuthModal.style.display = 'none';
+            usernameInput.value = currentName;
+            pendingNameCheck = null;
+        });
+
+        function applyNameChange(name, token) {
+            currentName = name;
+            sessionStorage.setItem('chat_name', currentName);
+            usernameInput.value = currentName;
+            updateAvatar(currentName);
+            announcePresence();
+            checkIfBlocked();
+            reloadAllMessages();
+        }
+
+        // ===============================================================
+        // 4. كشف الـ IP الحقيقي لكل جهاز
+        // ===============================================================
+        async function fetchUserIP() {
+            try {
+                // جلب عنوان الـ IP الحقيقي للجهاز (موبايل أو كمبيوتر)
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
+                userIP = data.ip;
+            } catch (e) {
+                try {
+                    const res2 = await fetch('https://api64.ipify.org?format=json');
+                    const data2 = await res2.json();
+                    userIP = data2.ip;
+                } catch(err) {
+                    userIP = isLocalhost ? '127.0.0.1 (محلي)' : 'IP مجهول';
+                }
+            }
+            checkIfBlocked();
+            announcePresence();
+        }
+
+        function announcePresence() {
+            const payload = {
+                userId: myUserId,
+                name: currentName,
+                ip: userIP,
+                device: deviceLabel
+            };
+            sendGlobalPacket({ type: 'presence', data: payload });
+            activeUsers.set(myUserId, payload);
+        }
+
+        // ===============================================================
+        // 5. الحظر ولوحة التحكم للـ Localhost
+        // ===============================================================
+        function getBlacklist() {
+            try { return JSON.parse(localStorage.getItem(BLACKLIST_KEY)) || []; } catch(e){ return []; }
+        }
+
+        function checkIfBlocked() {
+            const blacklist = getBlacklist();
+            const isBlocked = blacklist.some(b => b.ip === userIP || b.name === currentName);
+
+            if (isBlocked) {
+                blockedOverlay.style.display = 'flex';
+                blockedUserIpSpan.textContent = userIP;
+                adminRecoveryBox.style.display = isLocalhost ? 'block' : 'none';
+            } else {
+                blockedOverlay.style.display = 'none';
+            }
+        }
+
+        selfUnblockBtn.addEventListener('click', () => {
+            let blacklist = getBlacklist().filter(b => b.ip !== userIP && b.name !== currentName);
+            localStorage.setItem(BLACKLIST_KEY, JSON.stringify(blacklist));
+            sendGlobalPacket({ type: 'blacklist_sync', data: blacklist });
+            checkIfBlocked();
+            if (isLocalhost) renderAdminTables();
+            alert('✅ تم فك حظر نفسك بنجاح.');
+        });
+
+        if (isLocalhost) {
+            adminBtn.style.display = 'inline-flex';
+            adminBtn.addEventListener('click', () => {
+                announcePresence();
+                renderAdminTables();
+                adminModal.style.display = 'flex';
+            });
+            closeModalBtn.addEventListener('click', () => {
+                adminModal.style.display = 'none';
+            });
+        }
+
+        function renderAdminTables() {
+            const blacklist = getBlacklist();
+
+            onlineUsersTable.innerHTML = '';
+            activeUsers.forEach((userData, uid) => {
+                const isBlocked = blacklist.some(b => b.ip === userData.ip || b.name === userData.name);
+                const isMe = (uid === myUserId);
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${escapeHTML(userData.name)} ${isMe ? '<small style="color:blue;">(أنت)</small>' : ''}</strong></td>
+                    <td><span class="device-badge">${userData.device || '💻 كمبيوتر'}</span></td>
+                    <td><span class="ip-badge">${userData.ip}</span></td>
+                    <td>
+                        ${isBlocked 
+                            ? '<span style="color:red; font-size:12px;">محظور حالياً</span>' 
+                            : `<button class="btn-block" onclick="blockUser('${escapeHTML(userData.name)}', '${userData.ip}')">حظر ⛔</button>`}
+                    </td>
+                `;
+                onlineUsersTable.appendChild(tr);
+            });
+
+            blockedUsersTable.innerHTML = '';
+            if (blacklist.length === 0) {
+                blockedUsersTable.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8;">لا يوجد محظورين</td></tr>';
+            }
+            blacklist.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${escapeHTML(item.name)}</td>
+                    <td><span class="ip-badge">${item.ip}</span></td>
+                    <td><button class="btn-unblock" onclick="unblockUser(${index})">فك الحظر ✅</button></td>
+                `;
+                blockedUsersTable.appendChild(tr);
+            });
+        }
+
+        window.blockUser = function(name, ip) {
+            if (!confirm(`هل تريد حظر (${name}) صاحب الآي بي (${ip})؟`)) return;
+            let blacklist = getBlacklist();
+            blacklist.push({ name, ip, time: new Date().toLocaleString() });
+            localStorage.setItem(BLACKLIST_KEY, JSON.stringify(blacklist));
+            sendGlobalPacket({ type: 'blacklist_sync', data: blacklist });
+            renderAdminTables();
+            checkIfBlocked();
+        };
+
+        window.unblockUser = function(index) {
+            let blacklist = getBlacklist();
+            blacklist.splice(index, 1);
+            localStorage.setItem(BLACKLIST_KEY, JSON.stringify(blacklist));
+            sendGlobalPacket({ type: 'blacklist_sync', data: blacklist });
+            renderAdminTables();
+            checkIfBlocked();
+        };
+
+        // ===============================================================
+        // 6. إرسال الرسائل العامة والمهلة
+        // ===============================================================
+        function formatMentions(text) {
+            let escaped = escapeHTML(text);
+            const registry = getRegisteredNames();
+            const names = Object.values(registry).map(r => r.name);
+            if (!names.includes(currentName)) names.push(currentName);
+            names.sort((a,b) => b.length - a.length);
+
+            names.forEach(name => {
+                if (!name || name.length < 2) return;
+                const isMe = cleanString(name) === cleanString(currentName);
+                const reg = new RegExp(`(^|\\s|@)(${escapeRegex(name)})(?=\\s|$|[.,!?])`, 'gi');
+                escaped = escaped.replace(reg, (match, prefix, capName) => {
+                    return `${prefix}<span class="${isMe ? 'mention-me' : 'mention-other'}">@${capName}</span>`;
+                });
+            });
+            return escaped;
+        }
+
+        function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (isCoolingDown) return;
+
+            const text = messageText.value.trim();
+            if (!text) return;
+
+            checkIfBlocked();
+            if (blockedOverlay.style.display === 'flex') return;
+
+            const time = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+            const messageObj = {
+                id: Date.now() + Math.random(),
+                name: currentName,
+                ip: userIP,
+                device: deviceLabel,
+                text: text,
+                time: time
+            };
+
+            // حفظ الرسالة محلياً
+            const msgs = getStoredMessages();
+            msgs.push(messageObj);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs));
+
+            renderMessage(messageObj, true);
+            scrollToBottom();
+
+            // إرسال الرسالة لجميع الأجهزة في العالم أونلاين
+            sendGlobalPacket({ type: 'chat_msg', data: messageObj });
+
+            messageText.value = '';
+
+            // مهلة 5 ثواني
+            isCoolingDown = true;
+            let count = 5;
+            messageText.disabled = true;
+            sendBtn.disabled = true;
+            messageText.placeholder = `انتظر (${count}) ثوانٍ...`;
+
+            const timer = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    messageText.placeholder = `انتظر (${count}) ثوانٍ...`;
+                } else {
+                    clearInterval(timer);
+                    isCoolingDown = false;
+                    messageText.disabled = false;
+                    sendBtn.disabled = false;
+                    messageText.placeholder = "اكتب رسالتك للجميع هنا...";
+                    messageText.focus();
+                }
+            }, 1000);
+        });
+
+        function renderMessage(data, isMine) {
+            const div = document.createElement('div');
+            div.className = `message ${isMine ? 'mine' : 'theirs'}`;
+            div.innerHTML = `
+                <div class="sender-header ${isMine ? 'mine-header' : ''}">
+                    <span class="badge-verified">🔑 ${data.device || ''}</span>
+                    <span>${escapeHTML(data.name)}</span>
+                    ${isMine ? '<span style="font-size:10px; opacity:0.8;">(أنت)</span>' : ''}
+                </div>
+                <div class="msg-content">${formatMentions(data.text)}</div>
+                <span class="time">${data.time}</span>
+            `;
+            messagesContainer.appendChild(div);
+        }
+
+        function scrollToBottom() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function getStoredMessages() {
+            try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch(e){ return []; }
+        }
+
+        function reloadAllMessages() {
+            messagesContainer.innerHTML = '';
+            const msgs = getStoredMessages();
+            msgs.forEach(msg => renderMessage(msg, cleanString(msg.name) === cleanString(currentName)));
+            scrollToBottom();
+        }
+
+        usernameInput.value = currentName;
+        updateAvatar(currentName);
+
+        usernameInput.addEventListener('input', () => updateAvatar(usernameInput.value.trim() || 'م'));
+        usernameInput.addEventListener('change', () => attemptSetUsername(usernameInput.value.trim()));
+
+        openTokenBtn.addEventListener('click', () => {
+            tokenDisplayName.textContent = currentName;
+            tokenBoxValue.textContent = getMyTokenForName(currentName) || 'اسم بدون توكن مسجل';
+            tokenModal.style.display = 'flex';
+        });
+
+        closeTokenBtn.addEventListener('click', () => tokenModal.style.display = 'none');
+
+        copyTokenBtn.addEventListener('click', () => {
+            const tok = tokenBoxValue.textContent;
+            if (!tok || tok.includes('بدون توكن')) return;
+            navigator.clipboard.writeText(tok);
+            alert('✅ تم نسخ التوكن!');
+        });
+
+        clearChatBtn.addEventListener('click', () => {
+            if (confirm('مسح سجل الرسائل محلياً؟')) {
+                localStorage.removeItem(STORAGE_KEY);
+                reloadAllMessages();
+            }
+        });
+
+        function updateAvatar(name) {
+            avatarIcon.textContent = (name || 'م').charAt(0).toUpperCase();
+        }
+
+        function escapeHTML(str) {
+            const p = document.createElement('p');
+            p.textContent = str;
+            return p.innerHTML;
+        }
+
+        // تشغيل التطبيق والربط
+        fetchUserIP();
+        connectToGlobalServer();
+        reloadAllMessages();
+    </script>
+</body>
+</html>
